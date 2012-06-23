@@ -1244,11 +1244,3 @@ def createTextElement( nodeVal ):
     elem.setText( nodeVal )
     return elem
 
-
-def msort( nList, low, high ):
-    if low < high:
-        mid = math.floor( ( low + high ) / 2 )
-        msort( nList, low, mid )
-        msort( nList, mid + 1, high )
-        merge( nList, low, mid, high )
-
