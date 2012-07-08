@@ -1,3 +1,6 @@
+"""
+This is a tokenizer
+"""
 class Lexer:
     
     def __init__( self, data ):
