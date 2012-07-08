@@ -4,24 +4,23 @@ You may find this library useful for building applications like screen-scraping.
 Inspired by Jquery Library.
 """
 import re
-import math
-import traceback
-import sys
+import os
+from lexer import Lexer
 
-elementName = r'<([\w_]+)'
-restName = r'(?:\s+)?((?:[\w_:-]+\s*\=\s*[\'"](?:[^"]+)?[\'"]\s*;?)*)?\s*(?:/)?>'
+elementName = r'<([\w\d_:]+)'
+restName = r'(?:\s+)?((?:[\w\d_:-]+\s*\=\s*[\'"](?:[^"\']+)?[\'"]?\s*;?)*)?\s*(?:/)?>'
 
 #StartTag
-startTag = re.compile(elementName + restName)
+startTag = re.compile( elementName + restName )
 
 #endTag
-endTag = re.compile(r'\s*</\s*([\w_]+)\s*>')
+endTag = re.compile(r'\s*</\s*([\w\d_:]+)\s*>')
 
 
 whiteSpace = re.compile(r'\s+')
 
 #Used to spilt attributes into name/value pair i.e. ( class="one" ==> { 'class':'one' } )
-attributeSplitter = re.compile(r'(?:([\w_:-]+)\s*\=\s*[\'"]([^"]+)[\'"]\s*)')
+attributeSplitter = re.compile(r'(?:([\w_\d:-]+)\s*\=\s*[\'"]([^"\']+)[\'"]\s*)')
 
 #These regex are used for class and id based selection.
 """
@@ -29,23 +28,23 @@ attributeSplitter = re.compile(r'(?:([\w_:-]+)\s*\=\s*[\'"]([^"]+)[\'"]\s*)')
   @regVar:selector matches the "p" element and @regVar:left will contain ".class"
   and @regVar:right will hold the "#id" part.
 """
-selector = re.compile(r'([\w_:-]+)?((?:[#.\[][%?&+\s\w_ /:.\d#(),;\]\'"=$^*-\\]+)*)?')
+selector = re.compile(r'([\w_:\d*-]+)?((?:[#.\[][%?&+\s\w_ /:.\d#(),;\]\'"=$^*~\\-]+)*)?')
 
-sep = r'(?:(?:[.#](?:[\w_:./-]+))'
-leftSelector = r'|(?:\[\s*[\w_:-]+\s*(?:[$*^]?\s*\=\s*[\'"]\s*[^"\']+\s*[\'"])?\s*\]))?'
+sep = r'(?:(?:[.#](?:[\w\d_:./-]+))'
+leftSelector = r'|(?:\[\s*[\w\d_:*-]+\s*(?:[$*^~]?\s*\=\s*(?:[\'"]\s*[^"\']+\s*[\'"])|(?:[^\]]+))?\s*\]))?'
 left = '('+sep + leftSelector+')'
-right = r'((?:[%#.\[][^"]+)*)?'
+right = r'((?:[*%#.\[][^"\']+)*)?'
 
 newSelector = re.compile('(?:'+left + right+')?')
 
 #This regex is used to detect [href*=someVal] | [href^=some_val] | [href$='someVal']
-attributeSubStringSelector = re.compile(r'([*$^])\s*\=')
+attributeSubStringSelector = re.compile(r'([~*$^])\s*\=')
 
 emptyElements = [ "br", "hr", "meta", "link", 
                   "base", "link", "img", "embed",
                   "param", "area", "col", "input",
                   "basefont", "frame", "isindex" ]
-offset = 1 / 10000                  
+
 
 class HtmlDomNode:
      def __init__( self, nodeName="text",nodeType=3):
@@ -59,6 +58,7 @@ class HtmlDomNode:
           self.ancestorList = []
           self.text = ""
           self.pos = -1
+
      def setParentNode( self, parentNode ):
           self.parentNode = parentNode
           return self
@@ -156,12 +156,16 @@ class HtmlDomNode:
                #return self.attributes.get( attrName, "Undefined Attribute" );
           else:
                return " ".join( self.attributes.get( attrName, ["Undefined","Attribute"] ) )
-               
+     
+     def removeAttr( self, attrName ):
+        if attrName in self.attributes.keys():
+            del self.attributes[ attrName ]
+                   
      def remove( self, node ):
          """
             This function must be called on parent node of the node.
             It removes the node from the parents child list and adjusts
-            the sibling links.        
+            the sibling links.
          """
          parent_node = self
          if parent_node:
@@ -183,10 +187,6 @@ class HtmlDomNode:
             else:
                 self.after( None, node )
             node.setParentNode( self )
-            if not node.previousSiblingNode:
-                node.pos = round( self.pos + ( offset / 10 ), 8 )
-            else:
-                node.pos = round( node.previousSiblingNode.pos + offset, 8 )
         else:
             raise Exception( "Invalid node object. object must be of type HtmlDomNode." )
      def prepend( self, node ):
@@ -196,10 +196,6 @@ class HtmlDomNode:
             else:
                 self.before( None, node )
             node.setParentNode( self )
-            if not node.previousSiblingNode:
-                node.pos = round( self.pos + ( offset / 10 ), 8 )
-            else:
-                node.pos = round( node.previousSiblingNode.pos + offset, 8 )
         else:
             raise Exception( "Invalid node object. object must be of type Element." )
      def after( self, src, target ):
@@ -228,7 +224,6 @@ class HtmlDomNode:
             target.setSiblingNode( currNextSiblingNode )
             if currNextSiblingNode:
                 currNextSiblingNode.setPreviousSiblingNode( target )
-            target.pos = round( src.pos + offset, 8 )
         else:
             raise Exception( "Invalid node object. object must be of type Element." )
 
@@ -261,7 +256,6 @@ class HtmlDomNode:
             target.setPreviousSiblingNode( currPrevSiblingNode )
             if currPrevSiblingNode :
                 currPrevSiblingNode.setSiblingNode( target )
-            target.pos = round( src.pos + offset, 8 )
         else:
             raise Exception( "Invalid node object. object must be of type HtmlDomNode." )
      
@@ -282,7 +276,7 @@ class HtmlDomNode:
             node.parentNode.before( node, self )
      def copy( self ):
         """
-            This function creats of the "self" node
+            This function creats copy of the "self" node
         """
         n = None
         if self.nodeType == 1:
@@ -309,6 +303,8 @@ class HtmlDom:
           self.domNodes = {}
           self.domNodesList = []
           self.referenceToRootElement = None
+          self.sorted = False
+          self.xml_file = False
 
      def createDom(self,htmlString=None):
           if htmlString:
@@ -318,14 +314,17 @@ class HtmlDom:
           else:
                try:
                     try:
-                         import urllib2
+                         import urllib.request as urllib2
                     except ImportError:
                          #For python3
-                         import urllib.request as urllib2
+                         raise Exception( "urllib module not found" )
                     request = urllib2.Request(self.baseURL)
                     request.add_header('User-agent','Mozilla/9.876 (X11; U; Linux 2.2.12-20 i686, en; rv:2.0) Gecko/25250101 Netscape/5.432b1 (C-MindSpring)')
                     response = urllib2.urlopen(request)
                     data = response.read().decode( self.getEncoding( response ) )
+                    name, extension = os.path.splitext( self.baseURL )
+                    if extension.lower().strip() == ".xml":
+                        self.xml_file = True
                     self.parseHTML( data )
                     #self.domDictToList()
                except Exception as e:
@@ -337,30 +336,41 @@ class HtmlDom:
           return self
      def parseHTML( self, data ):
           # pos is used in order to preserve their logical order of nodes in the document
-          # because i am using dictionary datastructure to store the nodes so while retriving 
-          # nodes their orders will be different. In order to avoid that i sort the set on 
-          # "pos" variable[ sort_function:merge sort ]
+          # because i am using dictionary datastructure to store the nodes so while retriving
+          # nodes their orders will be different. In order to avoid that i sort the set on
+          # "pos" variable[ sort_function:time sort ]
           pos = 1
           index = 0
+          doc_seen = False
+          comment_string = "<!--"
           #Node stack will hold the parent Nodes. The top most node will be the current parent.
           nodeStack = []
-          while data:
-              # to remove new lines.
+          lexer = Lexer( data )
+          while True:
+               data,loop = lexer.getToken()
                data = data.strip()
+               if not loop:
+                    break
+               if not data:
+                    continue
                #Doctype tag
-               if data.find("<!DOCTYPE") == 0 or data.find("<!doctype") == 0:
+               if not doc_seen and ( data.find("<!DOCTYPE") == 0 or data.find("<!doctype") == 0 or data.find( "<?xml" ) == 0 ):
                     #Just pass through the doctype tag.
                     index = data.find(">")
-                    data = data[ index + 1:].strip()
+                    data = data[ index + 1:]
+                    doc_seen = True
                     continue
                #Comment Node
-               if data.find("<!--") == 0:
+               for i in range( 0, 4 ):
+                 if data[ i ] != comment_string[ i ]:
+                   break
+               else:
                     #Just pass through the comment node.
                     index = data.find("-->")
-                    data = data[index + len("-->"):].strip()
+                    data = data[index + 3:]
                     continue
 
-               #index is just used for extracting texts withing the tags.
+               #index is just used for extracting texts within the tags.
                #could change in future.
                index = data.find("<")
 
@@ -391,17 +401,19 @@ class HtmlDom:
                          if len(nodeStack) > 0:
                               nodeStack[ -1 ].append( textNode )
                               textNode.setAncestor( nodeStack[::-1] )
+                              self.domNodesList.append( textNode )
+                              self.registerNode( textNode.nodeName, textNode )
                          if _index != -1:
-                              data = data[_index:].strip()
+                              data = data[_index:]
                          else:
-                              data = data[index:].strip()
+                              data = data[index:]
                               
                     else:
-                         data = data.strip()
+                         pass
                #end of a tag
                if data.find("</") == 0:
                     match = endTag.search( data )
-                    data = data[len(match.group()):].strip()
+                    data = data[len(match.group()):]
                     try:
                          nodeStack.pop()
                          continue
@@ -429,38 +441,47 @@ class HtmlDom:
                          attrDict = {}
                          for attrName,attrValues in attr:
                               attrDict[attrName] = attrValues.split()
+
                          domNode.setAttributes( attrDict )
                     if len(nodeStack) > 0:
                          # nodeStack[ -1 ] is a HtmlDomNode object
                          nodeStack[ -1 ].append( domNode )
                          #setting ancestor list
                          domNode.setAncestor( nodeStack[::-1] )
-                         
                          #push the current node into the stack.so now domNode becomes the current parent node.
                          #if the current node is an empty element,do not push the element into the stack.
-                         if elementName not in emptyElements:
-                              nodeStack.append( domNode )
+                         if not self.xml_file:
+                             if elementName not in emptyElements:
+                                  nodeStack.append( domNode )
+                         elif match.group().find( "/>" ) == -1:
+                             nodeStack.append( domNode )
                     else:
                          domNode.setAncestor( nodeStack )
                          # nodeStack is a list
-                         nodeStack.append( domNode )
+                         nodeStack.append( domNode )                         
                          self.referenceToRootElement = domNode
 
                     self.registerNode( domNode.nodeName, domNode )
-                    data = data[len(match.group()):].strip()
+                    data = data[len(match.group()):]
                else:
+                    domNode = HtmlDomNode( "text" )
+                    domNode.pos = pos
+                    pos += 1
                     if index == -1:
-                        domNode = HtmlDomNode()
                         domNode.setText( data )
-                        self.domNodesList.append( domNode )
-                        data = data[ len( data ): ].strip()
+                        data = data[ len( data ): ]
                     else:
-                        data = data[1:].strip()
+                        domNode.setText( data[ :index ] )
+                        data = data[ index: ]
+                    self.registerNode( domNode.nodeName, domNode ) 
+                    self.domNodesList.append( domNode )
 
      def registerNode( self, nodeName, domNode ):
           if self.domNodes.get(nodeName,None):
                #self.domNodes[nodeName].append( domNode )
-               self.domNodes[ nodeName ] += self.getUniqueNodes( self.domNodes[ nodeName ], [ domNode ] )
+               if domNode not in self.domNodes[ nodeName ]:
+                    self.domNodes[nodeName].append( domNode )               
+#               self.domNodes[ nodeName ] += self.getUniqueNodes( self.domNodes[ nodeName ], [ domNode ] )
           else:
                self.domNodes[ nodeName ] = [domNode]
                
@@ -478,13 +499,22 @@ class HtmlDom:
      def getDomDict(self):
           return self.domNodes
 
-     def domDictToList(self):
+     def domDictToList(self, no_text_node = True ):
+          n = []
           for nodeName in self.domNodes:
                for selectedNode in self.domNodes[nodeName]:
                     #Converting the dictionary into a list of values.
                     self.domNodesList.append( selectedNode )
+                    if not no_text_node:
+                        if selectedNode.nodeType == 1:
+                            n.append( selectedNode )
+          
           self.domNodesList = list( set( self.domNodesList ) )
-          sorted( self.domNodesList, key = lambda x: x.pos )
+          if not self.sorted:
+              self.domNodesList = sorted( self.domNodesList, key = lambda x: x.pos )
+              self.sorted = True
+          if not no_text_node:
+                return sorted( n, key = lambda x: x.pos )
           return self.domNodesList
                     
      #new edition nList=[]
@@ -494,12 +524,13 @@ class HtmlDom:
           idSelector = []
           attributeSelector = {}
           attributeSelectorFlags = {
-                                     '$':False,'^':False,'*':False,'noVal':False
+                                     '$':False,'^':False,'*':False,'noVal':False,"~":False
                                    }
           selectorMethod = {'+':False,'>':False}
+          attr_list = []
           #new edition
           nodeList = nList
-          
+          _index = -1
           # the following line is required for handling following kinds of inputs
           # "div+a" getConverted into "div + a". Now it is easy to split on spaces.
           selectors = re.sub(r'([+>])',r' \1 ',selectors)
@@ -512,20 +543,20 @@ class HtmlDom:
           data = ""
           elemName = ""
           for value in selectors:
+               _index += 1
                if value == '+' or value == '>':
                     selectorMethod[value] = True
                     continue
-               if value == '*':
-                    return HtmlNodeList( self.domNodesList, self )
-               
                match = selector.search( value )
                if match:
                     elemName = match.group(1)
                     data = match.group(2)
-                    while data:
+                    invalid = 0
+                    while data and invalid != 100:
+                         invalid += 1
                          match = newSelector.search( data )
                          if match:
-                              data = match.group(2)
+                              data = match.group(2)                
                               #class selector
                               if match.group(1).find(".") == 0:
                                    index = match.group(1).find(".")
@@ -555,34 +586,62 @@ class HtmlDom:
                                    attr[1] = re.sub(r'[\'\"]?','',attr[1])
                                    #new addition
                                    attributeSelector[attr[0]] = attr[1]
+                                   if attr[ 1 ] == '':
+                                        attributeSelectorFlags[ "noVal" ] = True
+                                   attr_list.append( ( dict( attributeSelector ), dict( attributeSelectorFlags ) ) )
+                                   attributeSelector = {}
+                                   attributeSelectorFlags = {
+                                                                    '$':False,'^':False,'*':False,'noVal':False,"~":False
+                                                            }
+                    if invalid == 100:
+                        raise Exception( "Invalid regular expression" )
+                    else:
+                        invalid = 0
                     if elemName:
-                         nodes = self.domNodes.get( elemName, [] )
+                         if elemName == "*" and _index == 0:
+                            nodes = self.domDictToList( no_text_node = False )
+                            nodeList = []
+                         elif elemName == "*":
+                            nodes = self.domDictToList( no_text_node = False )
+                         else:
+                             nodes = self.domNodes.get( elemName, [] )
                     else:
                          if classSelector:
                               nodes = self.getNodesWithClassOrId(classSelector[-1],selectType='class')
                          elif idSelector:
                               nodes = self.getNodesWithClassOrId(idSelector[-1],selectType='id')
-                         elif attributeSelector:
+                         elif attr_list:
+                              nodes = []
                               #new Addition:Mon 13 Feb
-                              nodes = self.getNodesWithAttributes(attributeSelector,attributeSelectorFlags)
+                              for a_s, a_f in attr_list:
+                                  nodes += self.getNodesWithAttributes( a_s, a_f )
+                              nodes = list( set( nodes ) )
+                              
                     tmpList = []
+                    method = ''
                     for node in nodeList:
                          if selectorMethod['+']:
+                              method = '+'
                               for selectedNode in nodes:
                                    if node.nextSiblingNode == selectedNode:
-                                        tmpList +=self.getUniqueNodes(tmpList,[selectedNode])
-                              selectorMethod['+'] = False
+                                        tmpList.append( selectedNode )
+                              tmpList = list( set( tmpList ) )
                          elif selectorMethod['>']:
+                              method = '>'
                               for selectedNode in nodes:
                                    if selectedNode in node.children:
-                                        tmpList +=self.getUniqueNodes(tmpList,[selectedNode])
-                              selectorMethod['>'] = False
+                                        tmpList.append( selectedNode )
+                              tmpList = list( set( tmpList ) )
                          else:
                               for selectedNode in nodes:
                                    if not selectedNode.ancestorList:
                                         selectedNode.generateAncestorList()
                                    if node in selectedNode.ancestorList:
-                                        tmpList +=self.getUniqueNodes(tmpList,[selectedNode])
+                                        tmpList.append( selectedNode )
+                              tmpList = list( set( tmpList ) )
+                    if method != '':
+                        selectorMethod[ method ] = False
+                        method = ''
                     if not nodeList:
                          tmpList = nodes
                     nodes = tmpList
@@ -599,18 +658,21 @@ class HtmlDom:
                                         nodeAccepted = False
                                         break
                          if nodeAccepted:
-                              if attributeSelector:
-                                   nodeAccepted = self.getNodesWithAttributes(attributeSelector,attributeSelectorFlags,[node])
+                              for a_s, a_f in attr_list:
+                                   nodeAccepted = self.getNodesWithAttributes( a_s, a_f, [node] )
+                                   if not nodeAccepted:
+                                        break
                          if nodeAccepted:
                               nodeList.append(node)
                     classSelector = []
                     idSelector = []
                     attributeSelector = {}
                     attributeSelectorFlags = {'$':False,'^':False,'*':False,'noVal':False}
+                    attr_list = []
                if not nodeList:
                     break
           
-          sorted( nodeList, key = lambda x : x.pos )
+          nodeList = sorted( nodeList, key = lambda x : x.pos )
           return HtmlNodeList( nodeList, self )
      def getNodesWithClassOrId( self,className="",nodeList = None,selectType=""):
           tmpList = []
@@ -618,7 +680,8 @@ class HtmlDom:
                [ tmpList.append( selectedNode ) for selectedNode in self.domNodes[nodeName] if className in selectedNode.attributes.get(selectType,['']) ]
           return tmpList
      def getNodesWithAttributes( self, attributeSelector,attributeSelectorFlags,nodeList = None):
-          self.domDictToList()
+          if not self.sorted:
+              self.domDictToList()
           tmpList = self.domNodesList
           
           if nodeList:
@@ -628,7 +691,8 @@ class HtmlDom:
           for node in tmpList:
                nodeAccepted = True
                if attributeSelectorFlags['$']:
-                    if attributeSelector[key] not in node.attributes.get(key,[''])[-1][len(node.attributes.get(key,[''])[-1])::-1]:
+                    #if attributeSelector[key] not in node.attributes.get(key,[''])[-1][len(node.attributes.get(key,[''])[-1])::-1]:
+                    if attributeSelector[key] != node.attributes.get(key,[''])[-1]:
                          nodeAccepted = False
                elif attributeSelectorFlags['^']:
                     if attributeSelector[key] not in node.attributes.get(key,[''])[0]:
@@ -639,6 +703,9 @@ class HtmlDom:
                elif attributeSelectorFlags['noVal']:
                     if key not in node.attributes:
                          nodeAccepted = False
+               elif attributeSelectorFlags[ "~" ]:
+                    if attributeSelector[key] not in node.attributes.get( key, [] ):
+                        nodeAccepted = False
                elif attributeSelector[key] != " ".join(node.attributes.get(key,[])):
                     nodeAccepted = False
                if nodeAccepted:
@@ -696,27 +763,52 @@ class HtmlNodeList:
           elif isinstance( index, slice ):
               return HtmlNodeList( self.nodeList[ index ], self.htmlDom, self.nodeList, self )
      
-     def children(self, selector = None):
+     def children(self, selector = None, all_children = False):
           childrenList = []
-          for node in self.nodeList:
-               [ childrenList.append(child) for child in node.children if child.nodeType == 1]
-          #msort( childrenList, 0, len( childrenList ) - 1 )          
+          if not all_children:
+              for node in self.nodeList:
+                   [ childrenList.append(child) for child in node.children if child.nodeType == 1]
+          else:
+              for node in self.nodeList:
+                   [ childrenList.append(child) for child in node.children ]
+          
           if selector:
                return HtmlNodeList( childrenList, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
+               childrenList = sorted( childrenList, key = lambda x: x.pos )
                return HtmlNodeList( childrenList,self.htmlDom,self.nodeList,self)
           
-     def html(self):
-          htmlStr = ""
-          for node in self.nodeList:
-               htmlStr += node.html()
-          return htmlStr
+     def html( self, data = None ):
+          if not data:
+              htmlStr = ""
+              for node in self.nodeList:
+                   htmlStr += node.html()
+              return htmlStr
+          else:
+              for node in self.nodeList:
+                for child_node in node.children:
+                    node.remove( child_node )
+                    self.htmlDom.removeFromDomDict( child_node )
+                    del child_node
+                node.children = []
+              self.append( data )
+              return self
                
-     def text(self):
-          textStr = ""
-          for node in self.nodeList:
-               textStr += node.getText()
-          return textStr
+     def text( self, data = None ):
+          if not data:
+              textStr = ""
+              for node in self.nodeList:
+                   textStr += node.getText()
+              return textStr
+          else:
+              for node in self.nodeList:
+                for child_node in node.children:
+                    node.remove( child_node )
+                    self.htmlDom.removeFromDomDict( child_node )
+                    del child_node
+                node.children = []
+              self.append( data )
+              return self
      
      def attr( self, attrName, val = False):
           if len( self.nodeList ) > 0 and not val:
@@ -724,8 +816,14 @@ class HtmlNodeList:
           elif val:
                for node in self.nodeList:
                     node.attr( attrName, val )
+               return self
           else:
                raise IndexError
+     
+     def removeAttr( self, attrName ):
+        for node in self.nodeList:
+            node.removeAttr( attrName )
+        return self
 
      def filter(self,selector):
           nList = self.htmlDom.find( selector )
@@ -734,7 +832,7 @@ class HtmlNodeList:
                if node in nList.nodeList:
                     tmpList += self.getUniqueNodes( tmpList, [node] )
                     
-          sorted( tmpList, key = lambda x : x.pos )
+          tmpList = sorted( tmpList, key = lambda x : x.pos )
 
           return HtmlNodeList( tmpList,self.htmlDom, self.nodeList,self)
           
@@ -745,7 +843,8 @@ class HtmlNodeList:
                if node not in nList.nodeList:
                     tmpList.append( node )
                     
-          sorted( tmpList, key = lambda x : x.pos )
+          tmpList = list( set( tmpList ) )
+          tmpList = sorted( tmpList, key = lambda x : x.pos )
           return HtmlNodeList( tmpList,self.htmlDom, self.nodeList, self )
           
      def eq(self,index ):
@@ -770,7 +869,7 @@ class HtmlNodeList:
                     if node in selectedNode.ancestorList:
                         tmpList += self.getUniqueNodes( tmpList, [ node ] )
           
-          sorted( tmpList, key = lambda x: x.pos )
+          tmpList = sorted( tmpList, key = lambda x: x.pos )
           return HtmlNodeList( tmpList,self.htmlDom, self.nodeList,self)
           
      def _is(self,selector):
@@ -793,7 +892,7 @@ class HtmlNodeList:
           if selector:
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
-               sorted( tmpList, key = lambda x: x.pos )
+               tmpList = sorted( tmpList, key = lambda x: x.pos )
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList,self)
      
      def nextAll(self, selector = None ):
@@ -804,7 +903,7 @@ class HtmlNodeList:
           if selector:
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
-               sorted( tmpList, key = lambda x: x.pos )
+               tmpList = sorted( tmpList, key = lambda x: x.pos )
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self)
      
      def nextUntil(self,selector):
@@ -825,7 +924,7 @@ class HtmlNodeList:
                          pass
                else:
                     siblingsSet += self.getUniqueNodes( siblingsSet, tmpList )
-          sorted( siblingsSet, key = lambda x: x.pos )                    
+          siblingsSet = sorted( siblingsSet, key = lambda x: x.pos )                    
           return HtmlNodeList( siblingsSet,self.htmlDom, self.nodeList, self)
      
      def prev(self, selector = None ):
@@ -841,7 +940,7 @@ class HtmlNodeList:
           if selector:
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
-               sorted( tmpList, key = lambda x: x.pos )            
+               tmpList = sorted( tmpList, key = lambda x: x.pos )            
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self)
      
      def prevAll( self, selector = None ):
@@ -851,8 +950,7 @@ class HtmlNodeList:
           if selector:
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
-               sorted( tmpList, key = lambda x: x.pos )
-               tmpList = tmpList[ :: -1 ]
+               tmpList = sorted( tmpList, key = lambda x: x.pos )               
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self)
      
      def prevUntil(self,selector):
@@ -874,9 +972,9 @@ class HtmlNodeList:
                else:
                     siblingsSet += self.getUniqueNodes( siblingsSet, tmpList )
                     
-          sorted( siblingsSet, key = lambda x: x.pos )
+          siblingsSet = sorted( siblingsSet, key = lambda x: x.pos )
           return HtmlNodeList( siblingsSet,self.htmlDom, self.nodeList, self )
-      
+     
      def siblings(self,selector=None):
           """
              This function gets all the siblings of each node present in the current 
@@ -889,11 +987,11 @@ class HtmlNodeList:
                prevSiblingsSet = node.getPreviousSiblings()
                siblingsSet += self.getUniqueNodes( siblingsSet, prevSiblingsSet )
                nextSiblingsSet = node.getNextSiblings()
-               siblingsSet += self.getUniqueNodes( siblingsSet, nextSiblingsSet )          
+               siblingsSet += self.getUniqueNodes( siblingsSet, nextSiblingsSet )
           if selector:
                return HtmlNodeList( siblingsSet, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
-               sorted( siblingsSet, key = lambda x: x.pos )
+               siblingsSet = sorted( siblingsSet, key = lambda x: x.pos )
                return HtmlNodeList( siblingsSet, self.htmlDom, self.nodeList,self )
           
      def parent( self, selector = None ):
@@ -905,11 +1003,11 @@ class HtmlNodeList:
           tmpList = []
           for node in self.nodeList:
                if node.parentNode:
-                    tmpList.append(node.parentNode)                    
+                    tmpList += self.getUniqueNodes( tmpList, [ node.parentNode ] )
           if selector:
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
-               sorted( tmpList, key = lambda x: x.pos )
+               tmpList = sorted( tmpList, key = lambda x: x.pos )
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList,self)
                
      def parents( self, selector = None ):
@@ -926,7 +1024,7 @@ class HtmlNodeList:
           if selector:
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self ).filter( selector )
           else:
-               sorted( tmpList, key = lambda x: x.pos ) 
+               tmpList = sorted( tmpList, key = lambda x: x.pos ) 
                return HtmlNodeList( tmpList, self.htmlDom, self.nodeList, self)
 
      def parentsUntil(self,selector):
@@ -941,7 +1039,7 @@ class HtmlNodeList:
           selectedNodesList = []
           for node in self.nodeList:
                if not node.ancestorList:
-                    node.generateAncestorList()                
+                    node.generateAncestorList()
                tmpList = node.ancestorList
                for selectedNode in nList.nodeList:
                     try:
@@ -953,16 +1051,16 @@ class HtmlNodeList:
                          pass
                else:
                     parentsList += self.getUniqueNodes( parentsList, tmpList )
-          sorted( parentsList, key = lambda x: x.pos )                    
+          parentsList = sorted( parentsList, key = lambda x: x.pos )
           return HtmlNodeList( parentsList, self.htmlDom, self.nodeList, self )
           
      def add(self,selector):
           """
              This function adds new elements to the current list.
-          """     
+          """
           nList = self.htmlDom.find( selector )
           newNodeList = self.nodeList + self.getUniqueNodes( self.nodeList, nList.nodeList )
-          sorted( newNodeList, key = lambda x: x.pos )
+          newNodeList = sorted( newNodeList, key = lambda x: x.pos )
           return HtmlNodeList( newNodeList, self.htmlDom, self.nodeList,self )
           
      def andSelf(self):
@@ -970,7 +1068,7 @@ class HtmlNodeList:
           newList += self.getUniqueNodes( newList, self.previousNodeList )
           newList += self.getUniqueNodes( newList, self.nodeList )
           
-          sorted( newList, key = lambda x: x.pos )
+          newList = sorted( newList, key = lambda x: x.pos )
           return HtmlNodeList( newList, self.htmlDom, self.nodeList,self )
      
      def end(self):
@@ -988,6 +1086,7 @@ class HtmlNodeList:
           return self
      def length(self):
           return len(self.nodeList)
+          
      def contains( self, pattern ):
           pattern = re.compile( pattern )
           selectedNodeList = []
@@ -996,19 +1095,19 @@ class HtmlNodeList:
             if pattern.search( text ):
               selectedNodeList += self.getUniqueNodes( selectedNodeList, [node] )
               
-          sorted( seletedNodeList, key = lambda x: x.pos )
+          selectedNodeList = sorted( selectedNodeList, key = lambda x: x.pos )
           return HtmlNodeList( selectedNodeList, self.htmlDom, self.nodeList, self )
           
      def toList(self):
          return self.nodeList
      
-     def append( self, nodes,type_ = None ):
+     def append( self, nodes ):
         flag = False
         if isinstance( nodes, HtmlNodeList ):
             nodes = nodes.toList()
         elif isinstance( nodes, list ):
             nodes = nodes
-        elif isinstance( nodes, str ):# and not type_:
+        elif isinstance( nodes, str ):
             h = HtmlDom().createDom( nodes )
             h.domDictToList()
             nodes = h.domNodesList
@@ -1022,20 +1121,20 @@ class HtmlNodeList:
                     self.htmlDom.registerNode( node.nodeName, node )
                     other_nodes.append( node )
             nodes = tmpList
-            sorted( nodes, key = lambda x: x.pos )
+            nodes = sorted( nodes, key = lambda x: x.pos )
         else:
             nodes = [ nodes ]
         if len( self.nodeList ) == 1:
             for node in nodes:
-                self.htmlDom.removeFromDomDict( node )                    
+                self.htmlDom.removeFromDomDict( node )
                 if node.parentNode:
-                    node.parentNode.remove( node )      
+                    node.parentNode.remove( node )
                 self.nodeList[ 0 ].append( node )
                 self.htmlDom.registerNode( node.nodeName, node )
         else:
             removedAll = False
             for eachNode in self.nodeList:
-                for node in nodes:            
+                for node in nodes:
                     if not removedAll and node.parentNode:
                         self.htmlDom.removeFromDomDict( node )
                         try:
@@ -1046,21 +1145,17 @@ class HtmlNodeList:
                     node_c = node.copy()
                     eachNode.append( node_c )
                     self.htmlDom.registerNode( node_c.nodeName, node_c )
-        if flag:
-            for node in other_nodes:
-                if not node.previousSiblingNode:
-                    node.pos = round( node.parentNode.pos + ( offset / 10 ), 12 )
-                else:
-                    node.pos = round( node.previousSiblingNode.pos + offset, 12 )
+        self.htmlDom.sorted = False
+        modifyPositions( self.htmlDom.referenceToRootElement )
         return self
                 
-     def prepend( self, nodes, type_ = None ):
+     def prepend( self, nodes ):
         flag = False
         if isinstance( nodes, HtmlNodeList ):
             nodes = nodes.toList()[::-1]
         elif isinstance( nodes, list ):
             nodes = nodes[ ::-1]
-        elif isinstance( nodes, str ):# and not type_:
+        elif isinstance( nodes, str ):
             h = HtmlDom().createDom( nodes )
             h.domDictToList()
             nodes = h.domNodesList
@@ -1074,7 +1169,7 @@ class HtmlNodeList:
                     self.htmlDom.registerNode( node.nodeName, node )
                     other_nodes.append( node )
             nodes = tmpList
-            sorted( nodes, key = lambda x: x.pos )
+            nodes = sorted( nodes, key = lambda x: x.pos )
             nodes = nodes[::-1]
         else:
             nodes = [ nodes ]
@@ -1099,20 +1194,16 @@ class HtmlNodeList:
                     node_c = node.copy()
                     eachNode.prepend( node_c )
                     self.htmlDom.registerNode( node_c.nodeName, node_c )
-        if flag:
-            for node in other_nodes:
-                if not node.previousSiblingNode:
-                    node.pos = round( node.parentNode.pos + ( offset / 10 ), 12 )
-                else:
-                    node.pos = round( node.previousSiblingNode.pos + offset, 12 )
+        self.htmlDom.sorted = False
+        modifyPositions( self.htmlDom.referenceToRootElement )
         return self
-     def after( self, nodes, type_ = None ):
+     def after( self, nodes ):
         flag = False
         if isinstance( nodes, HtmlNodeList ):
             nodes = nodes.toList()[::-1]
         elif isinstance( nodes, list ):
             nodes = nodes[::-1]
-        elif isinstance( nodes, str ):# and not type_:
+        elif isinstance( nodes, str ):
             h = HtmlDom().createDom( nodes )
             h.domDictToList()
             nodes = h.domNodesList
@@ -1126,7 +1217,7 @@ class HtmlNodeList:
                     self.htmlDom.registerNode( node.nodeName, node )
                     other_nodes.append( node )
             nodes = tmpList
-            sorted( nodes, key = lambda x: x.pos )
+            nodes = sorted( nodes, key = lambda x: x.pos )
             nodes = nodes[ ::-1 ]
         else:
             nodes = [ nodes ]
@@ -1157,22 +1248,18 @@ class HtmlNodeList:
                     if parent:
                         parent.after( eachNode, node_c )
                     else:
-                        eachNode.after( None, node_c )
+                        eachNode.after( None, node_c, self.htmlDom )
                     self.htmlDom.registerNode( node_c.nodeName, node_c )
-        if flag:
-            for node in other_nodes:
-                if not node.previousSiblingNode:
-                    node.pos = round( node.parentNode.pos + ( offset / 10 ), 12 )
-                else:
-                    node.pos = round( node.previousSiblingNode.pos + offset, 12 )
+        self.htmlDom.sorted = False
+        modifyPositions( self.htmlDom.referenceToRootElement )
         return self
-     def before( self, nodes, type_ = None ):
+     def before( self, nodes ):
         flag = False
         if isinstance( nodes, HtmlNodeList ):
             nodes = nodes.toList()
         elif isinstance( nodes, list ):
             nodes = nodes
-        elif isinstance( nodes, str ):#and not type_:
+        elif isinstance( nodes, str ):
             h = HtmlDom().createDom( nodes )
             h.domDictToList()
             nodes = h.domNodesList
@@ -1186,7 +1273,7 @@ class HtmlNodeList:
                     self.htmlDom.registerNode( node.nodeName, node )
                     other_nodes.append( node )
             nodes = tmpList            
-            sorted( nodes, key = lambda x: x.pos )
+            nodes = sorted( nodes, key = lambda x: x.pos )
         else:
             nodes = [ nodes ]
         if len( self.nodeList ) == 1:
@@ -1218,14 +1305,94 @@ class HtmlNodeList:
                     else:
                         eachNode.before( None, node_c )
                     self.htmlDom.registerNode( node_c.nodeName, node_c )
-        if flag:
-            for node in other_nodes:
-                if not node.previousSiblingNode:
-                    node.pos = round( node.parentNode.pos + ( offset / 10 ), 12 )
-                else:
-                    node.pos = round( node.previousSiblingNode.pos + offset, 12 )
+        self.htmlDom.sorted = False
+        modifyPositions( self.htmlDom.referenceToRootElement )
+        return self
+     
+     def appendTo( self, nodes, context = None ):
+        """ 
+            Here nodes is the src and self is the target.
+            nodes can be either HtmlNodeList or string
+            if it is a string object then user has to supply 
+            a HtmlDom context object otherwise self`s context
+            will be used.
+        """
+        if isinstance( nodes, HtmlNodeList ):
+            nodes.append( self )
+        elif isinstance( nodes, str ):  
+            if context and isinstance( context, HtmlDom ):
+                cotext.find( nodes ).append( self )
+            else:
+                self.htmlDom.find( nodes ).append( self )
+        if not context:
+            modifyPositions( self.htmlDom.referenceToRootElement )
+        else:
+            modifyPositions( context.referenceToRootElement )
+        return self
+     def prependTo( self, nodes, context = None ):
+        """ 
+            Here nodes is the src and self is the target.
+            nodes can be either HtmlNodeList or string
+            if it is a string object then user has to supply 
+            a HtmlDom context object otherwise self`s context
+            will be used.
+        """
+        if isinstance( nodes, HtmlNodeList ):
+            nodes.prepend( self )
+        elif isinstance( nodes, str ):
+            if context and isinstance( context, HtmlDom ):
+                context.find( nodes ).prepend( self )
+            else:
+                self.htmlDom.find( nodes ).prepend( self )
+                
+        if not context:
+            modifyPositions( self.htmlDom.referenceToRootElement )
+        else:
+            modifyPositions( context.referenceToRootElement )                
         return self
         
+     def insertAfter( self, nodes, context = None ):
+        if isinstance( nodes, HtmlNodeList ):
+            nodes.after( self )
+        elif isinstance( nodes, str ):
+            if context and isinstance( context, HtmlDom ):
+                context.find( nodes ).after( self )
+            else:
+                self.htmlDom.find( nodes ).after( self )
+        if not context:
+            modifyPositions( self.htmlDom.referenceToRootElement )
+        else:
+            modifyPositions( context.referenceToRootElement )                
+        return self
+        
+     def insertBefore( self, nodes, context = None ):
+        if isinstance( nodes, HtmlNodeList ):
+            nodes.before( self )
+        elif isinstance( nodes, str ):
+            if context and isinstance( context, HtmlDom ):
+                context.find( nodes ).before( self )
+            else:
+                self.htmlDom.find( nodes ).before( self )
+        if not context:
+            modifyPositions( self.htmlDom.referenceToRootElement )
+        else:
+            modifyPositions( context.referenceToRootElement )                
+        return self
+     
+     def remove( self, selector = None ):
+        if not selector:
+            nodes = self.nodeList
+        else:
+            n = self.filter( selector )
+            nodes = n.nodeList
+        for node in nodes:
+            if node.parentNode:
+                node.parentNode.remove( node )
+                self.htmlDom.removeFromDomDict( node )
+                del node
+        self.htmlDom.sorted = False
+        return self
+     
      def getNode( self ):
         return self.nodeList[ 0 ]
      
@@ -1234,6 +1401,7 @@ class HtmlNodeList:
           for selectedNode in newList:
                if selectedNode not in srcList:
                     tmpList.append( selectedNode  )
+                    
           return tmpList
 
 def createElement( nodeName ):
@@ -1243,4 +1411,9 @@ def createTextElement( nodeVal ):
     elem = HtmlDomNode( "text", 3 )
     elem.setText( nodeVal )
     return elem
-
+    
+def modifyPositions( node, pos = 1 ):
+    node.pos = pos
+    for chld in node.children:
+        pos = modifyPositions( chld, pos + 1 )
+    return pos
