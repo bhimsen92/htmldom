@@ -37,9 +37,8 @@ The returned set is encapsulated into a HtmlNodeList object.
 --------
 This function returns the html data associated with the nodes present in the current set.
 e.g.
-HTML Text:
-<div>Good <span>Morning</span> </div>
-then:
+HTML Text: <div>Good <span>Morning</span> </div>
+
     html = dom.find("div").html()
     # '<div>Good <span>Morning</span> </div>' #The enclosing "div" will be retained as it is.
     
@@ -57,20 +56,22 @@ then:
 -------------------
 This function is used to reduce the current set to more specific set. This function accepts a css selector. Returns HtmlNodeList object.
 e.g.
+
     # Returns all the divs present in the page.
       divs = dom.find("div")
     # Filter only those divs which contains class ".one"
       divOne = divs.filter(".one")
       
 5._not(selector):
-			This function is the reverse of the filter function described above.
-			This function accepts a css selector.
-			Returns HtmlNodeList object.
-			e.g.
-			#Returns all the divs present in the page.
-			divs = dom.find("div")
-			#Returns only those which do not contain the class ".one"
-			divNotOne = divs._not(".one")
+-----------------
+This function is the reverse of the filter function described above. This function accepts a css selector. Returns HtmlNodeList object.
+e.g.
+    # Returns all the divs present in the page.
+      divs = dom.find("div")
+    # Returns only those which do not contain the class ".one"
+      divNotOne = divs._not(".one")
+      
+      
 6.eq(index):
 			This function is used to index the nodes present in the current set.
 			Returns HtmlNodeList object which encapsulates the indexed node object.
