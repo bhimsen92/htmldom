@@ -4,15 +4,16 @@ HTMLDOM LIBRARY
 
 HTMLDOM Library provides a simple interface for accessing and manipulating HTML documents.
 You may find this library useful for building applications like screen-scraping. Typical 
-usage often looks like this::
-	#!/usr/bin/python
-	from htmldom import htmldom	
-	dom = htmldom.HtmlDom(url)
-	dom.createDom()
-	#Find all the links which contains the text specified in "contains()" function argument.
-	#find() functions returns HtmlNodeList
-	links = dom.find("a").contains(some_text)
-	print(links.length())
+usage often looks like this:
+
+    #!/usr/bin/python
+    from htmldom import htmldom	
+    dom = htmldom.HtmlDom(url)
+    dom.createDom()
+    #Find all the links which contains the text specified in "contains()" function argument.
+    #find() functions returns HtmlNodeList
+    links = dom.find("a").contains(some_text)
+    print(links.length())
 
 The function names used in this library is similar to "jquery" and the library also supports CSS2 based selection.
 The following section describes the functions available in this library.
@@ -20,41 +21,47 @@ The following section describes the functions available in this library.
 HtmlDom Functions:
 ==================
 
-1.find(selector): 
-		  This function accepts a "css" selector and returns a HtmlNodeList object.
+1.find(selector)
+----------------
+This function accepts a "css" selector and returns a HtmlNodeList object.
 
 HtmlNodeList Functions:
 =======================
 
-1.children():
-		This function returns a list of children(direct) nodes of the nodes present in the current set.
-		The returned set is encapsulated into a HtmlNodeList object.
-2.html():
-		This function returns the html data associated with the nodes present in the current set.
-		e.g.
-		HTML Text:
-			<div>Good <span>Morning</span> </div>
-		then:
-			html = dom.find("div").html()
-			==> '<div>Good <span>Morning</span> </div>' #The enclosing "div" will be retained as it is.
-3.text():
-		This function returns the text data associated with the nodes present in the current set.
-		e.g.
-		HTML Text:
-			<div>Good <span>Morning</span> </div>
-		then:
-			text = dom.find("div").text()
-			==> 'Good Morning'
+1.children()
+-------------
+This function returns a list of children(direct) nodes of the nodes present in the current set.
+The returned set is encapsulated into a HtmlNodeList object.
+
+2.html()
+--------
+This function returns the html data associated with the nodes present in the current set.
+e.g.
+HTML Text:
+<div>Good <span>Morning</span> </div>
+then:
+    html = dom.find("div").html()
+    # '<div>Good <span>Morning</span> </div>' #The enclosing "div" will be retained as it is.
+    
+3.text()
+---------
+This function returns the text data associated with the nodes present in the current set.
+e.g.
+HTML Text:
+<div>Good <span>Morning</span> </div>
+then:
+    text = dom.find("div").text()
+    # 'Good Morning'
 			
-4.filter(selector):
-		 	This function is used to reduce the current set to more specific set.
-		 	This function accepts a css selector.
-		 	Returns HtmlNodeList object.
-		 	e.g.
-		 	#Returns all the divs present in the page.
-		 	divs = dom.find("div")
-			#Filter only those divs which contains class ".one"
-			divOne = divs.filter(".one")
+4.filter(selector)
+-------------------
+This function is used to reduce the current set to more specific set. This function accepts a css selector. Returns HtmlNodeList object.
+e.g.
+    # Returns all the divs present in the page.
+      divs = dom.find("div")
+    # Filter only those divs which contains class ".one"
+      divOne = divs.filter(".one")
+      
 5._not(selector):
 			This function is the reverse of the filter function described above.
 			This function accepts a css selector.
